@@ -601,21 +601,18 @@ def _render_movers(items: list[dict], header: str, is_gainer: bool):
     rows  = ""
     for item in items:
         pct = item.get("daily_return_pct", 0)
-        rows += f"""
-        <tr>
-            <td style="padding:6px 8px;">{item['company']}</td>
-            <td style="color:#888; font-size:0.8rem; padding:6px 4px;">{item['ticker']}</td>
-            <td style="color:{color}; font-weight:700; text-align:right; padding:6px 8px;">
-                {arrow} {abs(pct):.2f}%
-            </td>
-        </tr>"""
-    st.markdown(f"""
-    <div class="section-title">{header}</div>
-    <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-        {rows}
-    </table>
-    """, unsafe_allow_html=True)
+        rows += f"""<tr>
+<td style="padding:6px 8px;">{item['company']}</td>
+<td style="color:#888; font-size:0.8rem; padding:6px 4px;">{item['ticker']}</td>
+<td style="color:{color}; font-weight:700; text-align:right; padding:6px 8px;">{arrow} {abs(pct):.2f}%</td>
+</tr>"""
 
+    st.markdown(f"""
+<div class="section-title">{header}</div>
+<table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+{rows}
+</table>
+""", unsafe_allow_html=True)
 
 with gl1:
     gainers = metrics.get("Top 5 Gainers", [])
