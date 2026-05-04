@@ -291,6 +291,9 @@ def calculate_metrics(
     # Weighted P/E
     pe_val = weights_df.attrs.get("weighted_pe")
 
+    # Combined Mcap
+    total_mcap = float(weights_df["full_mc_cr"].sum()) if "full_mc_cr" in weights_df.columns else 0.0
+
     # Gainers / Losers
     sorted_df = weights_df.sort_values("daily_return_pct", ascending=False)
     top5      = sorted_df.head(5)[["company", "ticker", "daily_return_pct"]].to_dict("records")
@@ -305,6 +308,7 @@ def calculate_metrics(
         "Max Drawdown":        f"{max_dd:.2%}",
         "Win Rate":            f"{win_rate:.2%}",
         "Trading Days":        len(returns),
+        "Combined Mcap (₹ Cr)":f"₹{total_mcap:,.0f}",
         "Beta (vs NIFTY 50)":  beta,
         "Weighted P/E":        pe_val,
         "Top 5 Gainers":       top5,
