@@ -1,0 +1,24 @@
+# New Age Tech Index — Python Dependencies
+# Install:  pip install -r requirements.txt
+
+# Core data
+yfinance>=0.2.38
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Dashboard
+streamlit>=1.34.0
+streamlit-autorefresh>=1.0.1
+plotly>=5.22.0
+
+# HTTP (Airtable sync)
+requests>=2.31.0
+
+# Timezone
+# zoneinfo is stdlib (Python 3.9+); tzdata needed on Linux/Docker
+tzdata>=2024.1
+
+# Optional: broker API clients (uncomment as needed)
+# kiteconnect>=5.0.1       # Zerodha Kite  — real-time NSE quotes
+# dhanhq>=2.0.0            # Dhan HQ       — real-time NSE/BSE quotes
+# NorenRestApiPy>=1.0.0    # Shoonya       — free real-time API
