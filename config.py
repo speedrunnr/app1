@@ -107,16 +107,6 @@ CSV_CONSTITUENTS   = os.path.join(DATA_DIR, "constituent_snapshot.csv")
 CSV_EOD_PREFIX     = os.path.join(DATA_DIR, "eod")           # eod_YYYYMMDD.csv
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AIRTABLE  — fill in your credentials or set env vars
-# ─────────────────────────────────────────────────────────────────────────────
-AIRTABLE_API_KEY    = os.getenv("AIRTABLE_API_KEY", "YOUR_AIRTABLE_API_KEY")
-AIRTABLE_BASE_ID    = os.getenv("AIRTABLE_BASE_ID", "YOUR_AIRTABLE_BASE_ID")
-# Table names — create these tables in your Airtable Base before first sync
-AIRTABLE_INDEX_TABLE       = "Index Levels"
-AIRTABLE_CONSTITUENT_TABLE = "Constituents"
-AIRTABLE_METRICS_TABLE     = "Metrics"
-
-# ─────────────────────────────────────────────────────────────────────────────
 # BROKER API FALLBACK  (optional — currently a placeholder)
 # Set BROKER_PROVIDER to "kite" | "dhan" | "shoonya" to enable real-time feed
 # ─────────────────────────────────────────────────────────────────────────────
