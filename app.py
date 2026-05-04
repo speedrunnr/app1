@@ -10,7 +10,6 @@ Features
 • Top 5 Gainers / Losers
 • Auto-refresh during NSE/BSE market hours (configurable interval)
 • Hourly CSV backup + EOD export
-• Airtable sync button + auto-sync during market hours
 """
 
 from __future__ import annotations
@@ -27,7 +26,6 @@ import yfinance as yf
 from plotly.subplots import make_subplots
 from streamlit_autorefresh import st_autorefresh   # pip install streamlit-autorefresh
 
-import airtable_sync
 import csv_logger
 import index_engine
 from config import (
@@ -152,7 +150,6 @@ def _init_state():
         "live_quotes":      None,
         "last_full_fetch":  None,
         "last_live_fetch":  None,
-        "airtable_status":  None,
         "fetch_error":      None,
     }
     for k, v in defaults.items():
@@ -472,12 +469,6 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    st.markdown("### ☁️ Airtable Sync")
-    sync_clicked = st.button("Sync to Airtable", use_container_width=True)
-    if st.session_state.airtable_status:
-        st.caption(st.session_state.airtable_status)
-
-    st.markdown("---")
     st.markdown("### 💾 CSV Export")
     eod_clicked = st.button("Export EOD CSV Now", use_container_width=True)
 
@@ -525,21 +516,6 @@ if eod_clicked and st.session_state.weights_df is not None:
         st.session_state.metrics or {},
     )
     st.sidebar.success(f"Exported: {os.path.basename(path)}")
-
-if sync_clicked and st.session_state.weights_df is not None:
-    with st.spinner("Syncing to Airtable…"):
-        res = airtable_sync.full_sync(
-            index_level=float(st.session_state.performance_df["index_level"].iloc[-1]),
-            daily_return_pct=float(st.session_state.performance_df["daily_return"].iloc[-1] * 100),
-            weights_df=st.session_state.weights_df,
-            metrics=st.session_state.metrics or {},
-            live_quotes=st.session_state.live_quotes,
-            data_source=get_provider().data_source_label,
-        )
-    status = "✅ " + " | ".join(
-        f"{k}: {'ok' if v else '❌'}" for k, v in res.items()
-    )
-    st.session_state["airtable_status"] = status
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Error guard
