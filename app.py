@@ -6,7 +6,7 @@ Features
 ────────
 • Interactive Plotly line chart (Index @ 1,000 base  OR  % change vs NIFTY 50)
 • Constituent performance table (CMP, daily %, tier, weight)
-• Index health metrics (P/E, beta, vol, Sharpe, drawdown)
+• Index health metrics (P/E, mcap, vol, Sharpe, drawdown)
 • Top 5 Gainers / Losers
 • Auto-refresh during NSE/BSE market hours (configurable interval)
 • Hourly CSV backup + EOD export
@@ -58,12 +58,7 @@ st.markdown("""
         --nati-blue:   #2E86AB;
         --nati-amber:  #F18F01;
         --nati-green:  #06A77D;
-        --nati-dark:   #1A1A2E;
-        --nati-light:  #F5F7FA;
-        --nati-card:   #FFFFFF;
     }
-
-    .main { background-color: var(--nati-light); }
 
     /* ---------- Header banner ---------- */
     .nati-header {
@@ -78,15 +73,14 @@ st.markdown("""
 
     /* ---------- Metric cards ---------- */
     .metric-card {
-        background: var(--nati-card);
+        background-color: var(--secondary-background-color);
         border-radius: 10px;
         padding: 1rem 1.2rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
         border-left: 4px solid var(--nati-blue);
         margin-bottom: 1rem;
     }
     .metric-card .label { font-size: 0.75rem; color: #888; text-transform: uppercase; font-weight: 600; }
-    .metric-card .value { font-size: 1.5rem; font-weight: 700; color: #1A1A2E; }
+    .metric-card .value { font-size: 1.5rem; font-weight: 700; color: var(--text-color); }
     .metric-card .delta { font-size: 0.8rem; margin-top: 2px; }
     .delta-pos  { color: #06A77D; }
     .delta-neg  { color: #E63946; }
@@ -107,7 +101,7 @@ st.markdown("""
     .section-title {
         font-size: 1rem;
         font-weight: 700;
-        color: #1A1A2E;
+        color: var(--text-color);
         border-bottom: 2px solid var(--nati-blue);
         padding-bottom: 0.3rem;
         margin-bottom: 1rem;
@@ -279,7 +273,7 @@ def _build_index_chart(
         nifty_scaled  = nifty_aligned / nifty_aligned[~np.isnan(nifty_aligned)][0] * BASE_INDEX_VALUE
         fig.add_trace(go.Scatter(
             x=dates, y=nifty_scaled,
-            name="NIFTY 50 (scaled)", line=dict(color="#555555", width=1.5, dash="dot"),
+            name="NIFTY 50 (scaled)", line=dict(color="rgba(150,150,150,0.8)", width=1.5, dash="dot"),
             hovertemplate="<b>NIFTY 50 (scaled)</b><br>%{x|%d %b %Y}<br>Level: %{y:,.2f}<extra></extra>",
         ), row=1, col=1)
 
@@ -302,11 +296,11 @@ def _build_index_chart(
 
         fig.add_trace(go.Scatter(
             x=dates, y=nifty_pct,
-            name="NIFTY 50", line=dict(color="#555555", width=1.5, dash="dot"),
+            name="NIFTY 50", line=dict(color="rgba(150,150,150,0.8)", width=1.5, dash="dot"),
             hovertemplate="<b>NIFTY 50</b><br>%{x|%d %b %Y}<br>Return: %{y:+.2f}%<extra></extra>",
         ), row=1, col=1)
 
-        fig.add_hline(y=0, line_color="rgba(0,0,0,0.2)", line_dash="solid", row=1, col=1)
+        fig.add_hline(y=0, line_color="rgba(128,128,128,0.3)", line_dash="solid", row=1, col=1)
         yaxis_title = "Cumulative Return (%)"
 
     # ── Optional Tier sub-indices ──
@@ -340,17 +334,15 @@ def _build_index_chart(
     # ── Layout ──
     fig.update_layout(
         height=520,
-        plot_bgcolor="#FAFAFA",
-        paper_bgcolor="white",
         font=dict(family="Inter, sans-serif", size=12),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
-            bgcolor="rgba(255,255,255,0.8)", bordercolor="#E5E5E5", borderwidth=1,
+            borderwidth=0,
         ),
         hovermode="x unified",
         margin=dict(l=10, r=10, t=30, b=10),
     )
-    fig.update_yaxes(title_text=yaxis_title,          row=1, col=1, showgrid=True, gridcolor="#EFEFEF")
+    fig.update_yaxes(title_text=yaxis_title,          row=1, col=1, showgrid=True, gridcolor="rgba(128,128,128,0.2)")
     fig.update_yaxes(title_text="Daily Ret %", showgrid=False, row=2, col=1)
     fig.update_xaxes(showgrid=False, row=2, col=1)
     fig.update_xaxes(
@@ -363,7 +355,6 @@ def _build_index_chart(
                 dict(count=1,  label="1Y",  step="year",  stepmode="backward"),
                 dict(step="all", label="All"),
             ],
-            bgcolor="#F5F7FA",
         ),
         row=1, col=1,
     )
@@ -385,11 +376,11 @@ def _build_drawdown_chart(performance_df: pd.DataFrame) -> go.Figure:
         hovertemplate="%{x|%d %b %Y}<br>DD: %{y:.2f}%<extra></extra>",
     ))
     fig.update_layout(
-        height=200, plot_bgcolor="#FAFAFA", paper_bgcolor="white",
+        height=200,
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=False,
         hovermode="x unified",
-        yaxis=dict(title="Drawdown (%)", showgrid=True, gridcolor="#EFEFEF"),
+        yaxis=dict(title="Drawdown (%)", showgrid=True, gridcolor="rgba(128,128,128,0.2)"),
         xaxis=dict(showgrid=False),
     )
     return fig
@@ -409,11 +400,11 @@ def _build_rolling_vol_chart(performance_df: pd.DataFrame) -> go.Figure:
         hovertemplate="%{x|%d %b %Y}<br>Vol: %{y:.2f}%<extra></extra>",
     ))
     fig.update_layout(
-        height=200, plot_bgcolor="#FAFAFA", paper_bgcolor="white",
+        height=200,
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=False,
         hovermode="x unified",
-        yaxis=dict(title="Ann. Vol (%)", showgrid=True, gridcolor="#EFEFEF"),
+        yaxis=dict(title="Ann. Vol (%)", showgrid=True, gridcolor="rgba(128,128,128,0.2)"),
         xaxis=dict(showgrid=False),
     )
     return fig
@@ -568,8 +559,8 @@ with k3:
     vol = metrics.get("Annualized Vol (σ)", "—")
     metric_card("Index Volatility", str(vol))
 with k4:
-    beta = metrics.get("Beta (vs NIFTY 50)")
-    metric_card("Beta (vs NIFTY 50)", f"{beta:.2f}" if beta else "—")
+    mcap = metrics.get("Combined Mcap (₹ Cr)")
+    metric_card("Combined Mcap", str(mcap) if mcap else "—")
 with k5:
     metric_card("Sharpe Ratio", metrics.get("Sharpe Ratio", "—"))
 with k6:
@@ -676,7 +667,7 @@ def _color_daily(val):
 
 styled = (
     display_df.style
-    .applymap(_color_daily, subset=["Daily Chg %"])
+    .map(_color_daily, subset=["Daily Chg %"])
     .format({
         "CMP (₹)":       "{:,.2f}",
         "Daily Chg %":   "{:+.2f}%",
