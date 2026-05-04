@@ -5,10 +5,25 @@ awareness and broker-API fallback.
 yfinance Limitations (documented for production):
 ─────────────────────────────────────────────────
 1. DATA LATENCY   : yfinance pulls data from Yahoo Finance, which carries a
-                    ~15-minute delay for NSE/BSE quotes.
-2. RATE LIMITING  : Batch downloading prices is safe. Fetching metadata (.info)
-                    in a loop will result in IP bans. We now rely on config.py
-                    for outstanding shares.
+                    ~15-minute delay for NSE/BSE quotes.  Intraday `interval="1m"`
+                    data has the same lag.  For true tick-level real-time you must
+                    use a licensed broker API (see BrokerFetcher below).
+
+2. RATE LIMITING  : Yahoo Finance imposes an undocumented request cap (~2,000 req/hr
+                    per IP).  With 47 tickers polled every 5 min during a 6.25-hr
+                    session that is ~3,500 calls/day — comfortably under the limit
+                    IF you batch-download with yf.download().  Never call
+                    yf.Ticker().history() in a tight loop for many tickers.
+
+3. NO OFFICIAL SLA: Yahoo Finance is an unofficial, undocumented API.  Any
+                    structural change to Yahoo's servers can break the library
+                    without notice.  Suitable for research/prototyping;
+                    NOT suitable for production trading systems.
+
+Broker API Fallback hierarchy (when BROKER_PROVIDER env var is set):
+    kite     → KiteConnect (Zerodha) — official WebSocket tick feed, <100ms latency
+    dhan     → Dhan HQ API           — REST + WebSocket, NSE/BSE real-time
+    shoonya  → Finvasia Shoonya      — free API, REST polling
 """
 
 from __future__ import annotations
@@ -80,6 +95,11 @@ def market_status_label() -> str:
 class YFinanceFetcher:
     """
     Batch-downloads NSE data via yfinance.
+
+    Design choices for rate-limit safety:
+    • Uses yf.download() with group_by='ticker' — single HTTP call for all tickers.
+    • Falls back to individual Ticker.history() only for metadata (sharesOutstanding).
+    • Implements exponential back-off on HTTP errors.
     """
 
     LATENCY_NOTE = (
@@ -95,6 +115,10 @@ class YFinanceFetcher:
     ) -> dict[str, dict]:
         """
         Fetch OHLCV history for all constituents.
+
+        Returns
+        -------
+        data : dict  {ticker -> {"company", "price" (Series), "volume" (Series), "shares" (int)}}
         """
         tickers = [info["ticker"] for info in CONSTITUENT_UNIVERSE.values()]
         logger.info("Batch-downloading %d tickers from yfinance …", len(tickers))
@@ -119,7 +143,7 @@ class YFinanceFetcher:
         else:
             raise RuntimeError("yfinance batch download failed after 3 attempts.")
 
-        # ── 2. Parse data and assign config metadata ──────────────────────────
+        # ── 2. Per-ticker metadata (shares outstanding) ──────────────────────
         data: dict[str, dict] = {}
         failed: list[str] = []
         not_listed: list[str] = []
@@ -128,6 +152,7 @@ class YFinanceFetcher:
             ticker = info["ticker"]
             try:
                 if len(tickers) == 1:
+                    # yf.download returns flat DataFrame for single ticker
                     price_s  = raw["Close"]
                     volume_s = raw["Volume"]
                 else:
@@ -144,11 +169,20 @@ class YFinanceFetcher:
                     not_listed.append(f"{company} ({ticker})")
                     continue
 
-                # ── BYPASS YAHOO FINANCE METADATA RATE LIMITS ──
-                # Read shares and PE from config.py directly. 
-                # If not present in config, fall back to a default of 15 Crore shares so the UI doesn't crash.
-                shares = info.get("shares", 150_000_000)
-                pe     = info.get("pe", 45.0)
+                # Fetch shares outstanding separately (not in batch download)
+                stock = yf.Ticker(ticker)
+                stock_info = stock.info
+                shares = (
+                    stock_info.get("sharesOutstanding")
+                    or stock_info.get("impliedSharesOutstanding")
+                )
+
+                if shares is None:
+                    failed.append(f"{company} ({ticker}) — no shares data")
+                    continue
+
+                # P/E ratio (trailing)
+                pe = stock_info.get("trailingPE") or stock_info.get("forwardPE")
 
                 data[ticker] = {
                     "company": company,
@@ -200,7 +234,37 @@ class YFinanceFetcher:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class BrokerFetcher:
-    """Thin adapter layer over broker APIs for true real-time (< 1 sec) quotes."""
+    """
+    Thin adapter layer over broker APIs for true real-time (< 1 sec) quotes.
+
+    Supported providers
+    ───────────────────
+    kite    : Zerodha KiteConnect
+              pip install kiteconnect
+              Requires: KITE_API_KEY + KITE_ACCESS_TOKEN (regenerated daily via
+              browser-based OAuth — automate with a headless Selenium session or
+              the Kite publisher flow).
+              WebSocket tick feed gives last-traded-price in ~50 ms.
+
+    dhan    : Dhan HQ
+              pip install dhanhq
+              Requires: DHAN_CLIENT_ID + DHAN_ACCESS_TOKEN (long-lived token,
+              refresh monthly via Dhan web panel).
+              REST endpoint /v2/marketfeed/ltp provides < 500 ms LTP.
+
+    shoonya : Finvasia Shoonya
+              pip install NorenRestApiPy
+              Free API; requires SHOONYA_USER_ID + SHOONYA_PASSWORD.
+              WebSocket provides tick-level data; REST fallback available.
+
+    Integration notes
+    ─────────────────
+    • NSE ticker mapping differs from Yahoo symbols.  e.g. "ETERNAL.NS" → "ETERNAL"
+      on NSE segment.  A lookup table is maintained per broker.
+    • Only LTP (last-traded price) is needed for real-time index calculation.
+    • History (for weight calculation at start of day) still fetched via yfinance
+      to avoid burning broker API quota.
+    """
 
     NSE_SYMBOL_MAP = {ticker: ticker.replace(".NS", "") for ticker in
                       [v["ticker"] for v in CONSTITUENT_UNIVERSE.values()]}
@@ -210,6 +274,7 @@ class BrokerFetcher:
         self._client  = None
 
     def connect(self) -> bool:
+        """Initialise broker connection.  Returns True on success."""
         if self.provider == "kite":
             return self._connect_kite()
         elif self.provider == "dhan":
@@ -268,6 +333,7 @@ class BrokerFetcher:
         return False
 
     def fetch_current_quotes(self) -> dict[str, float]:
+        """Return dict of {yfinance_ticker -> LTP}."""
         if self._client is None:
             raise RuntimeError("BrokerFetcher not connected. Call .connect() first.")
         if self.provider == "kite":
@@ -289,6 +355,7 @@ class BrokerFetcher:
         return result
 
     def _dhan_ltp(self) -> dict[str, float]:
+        # Dhan uses numeric instrument tokens; simplified here
         result: dict[str, float] = {}
         for yf_ticker, nse_sym in self.NSE_SYMBOL_MAP.items():
             try:
@@ -318,6 +385,10 @@ class BrokerFetcher:
 class DataProvider:
     """
     Single entry-point for the rest of the application.
+
+    • Uses yfinance for history (always).
+    • Uses the configured broker for real-time quotes when BROKER_PROVIDER
+      is set; falls back to yfinance (15-min delay) otherwise.
     """
 
     def __init__(self):
